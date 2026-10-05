@@ -1,0 +1,5 @@
+# dsh-password-login bundle patch: inserts the plugin into any profile that
+# adds this package as a bundle (dsh plugin add / bundles list).
+- insert:
+    - id: dsh-password-login
+      name: 'dsh-password-login'

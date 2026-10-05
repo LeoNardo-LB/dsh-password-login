@@ -1,0 +1,60 @@
+/**
+ * Build the browser half (src/client -> lib/client.js) in the DSH client
+ * module-table format: window.__ModuleLoader__.load({ id, factory }) with a
+ * CJS factory resolving externals through the injected require (platform
+ * modules + served bundles). Mirrors the dsh-keepalive pipeline.
+ */
+import { build } from 'esbuild'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+
+/** CSS files become exported strings; no external css pipeline. */
+const cssToStringPlugin = {
+  name: 'pl-css-to-string',
+  setup(buildApi) {
+    buildApi.onLoad({ filter: /\.css$/ }, (args) => ({
+      contents: 'export default ' + JSON.stringify(readFileSync(args.path, 'utf8')),
+      loader: 'js'
+    }))
+  }
+}
+
+/** Resolved from the loader module table at runtime (never inlined). */
+const EXTERNALS = [
+  'react',
+  'react/jsx-runtime',
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-client-ui-primitives'
+]
+
+// Assembled with String.raw so backslash escapes survive every write path.
+const BANNER = String.raw`window.__ModuleLoader__.load({
+	id: "dsh-password-login",
+	factory: (require) => {
+		var module = { exports: {} };
+		var exports = module.exports;
+		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });`
+const FOOTER = String.raw`
+		return module.exports;
+	}
+});`
+
+const result = await build({
+  entryPoints: ['src/client/index.tsx'],
+  bundle: true,
+  format: 'cjs',
+  platform: 'browser',
+  jsx: 'automatic',
+  loader: { '.ts': 'ts', '.tsx': 'tsx' },
+  external: EXTERNALS,
+  plugins: [cssToStringPlugin],
+  write: false,
+  banner: { js: BANNER },
+  footer: { js: FOOTER }
+})
+
+const output = result.outputFiles[0]
+if (output === undefined) throw new Error('esbuild produced no output')
+mkdirSync(dirname('lib/client.js'), { recursive: true })
+writeFileSync('lib/client.js', output.text)
+console.log('built lib/client.js (' + output.text.length + ' bytes)')
