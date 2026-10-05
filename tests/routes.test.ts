@@ -321,7 +321,7 @@ describe('POST /revoke (回收所有会话，不改密)', () => {
     expect(box.statusCode).toBe(405)
   })
 
-  it('advances the epoch without touching the password and auto-reissues', async () => {
+  it('advances the epoch without touching the password and NO auto-reissue', async () => {
     let revokedAt: number | undefined
     const persisted: string[] = []
     const routes = createRoutes(makeDeps({
@@ -334,10 +334,8 @@ describe('POST /revoke (回收所有会话，不改密)', () => {
     expect(box.statusCode).toBe(200)
     expect(revokedAt).toBe(NOW)
     expect(persisted).toEqual([]) // 密码不动
-    expect(setCookieValue(box)).toContain('dsh-auth-') // 调用者换票存活
-    const cookie = setCookieValue(box).split(';')[0]!
-    const payload = JSON.parse(Buffer.from(cookie.slice(cookie.indexOf('=') + 1).split('.')[1]!, 'base64url').toString('utf8')) as { issuedAt: number }
-    expect(payload.issuedAt).toBeGreaterThanOrEqual(NOW) // 新票不死于自己发起的撤销
+    // 用户裁决 2026-10-05（二次）：绝对全员下线——不换票，调用者自身同样失效
+    expect(box.headers['set-cookie']).toBeUndefined()
   })
 
   it('surfaces epoch persistence failures as 500', async () => {

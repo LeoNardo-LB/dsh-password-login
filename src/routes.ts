@@ -247,8 +247,9 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
   }
 
   /** Panel face: revoke every issued session without touching the password
-   * (#512 用户裁决 2026-10-05，恢复被 #21 砍掉的按钮——yml 热改不撤票的补位)。
-   * admit 门（需已认证会话）；成功即全员下线，调用者经自动换票保持在线。 */
+   * (#512 用户裁决 2026-10-05；同日二次裁决：不自动换票——回收=绝对全员下线，
+   * 含点击者本人，经书签重登；与 rotate 的改密者存活语义区分).
+   * admit 门（需已认证会话）发起，成功后该会话自身同样失效。 */
   const revoke: Handler = async (req, res) => {
     if (!requireMethod(req, res, 'POST')) return
     const admission = deps.admit(req)
@@ -262,11 +263,6 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
       await deps.onRevoked(at)
     } catch (error) {
       sendJson(res, 500, { ok: false, error: 'revocation failed: ' + String(error) })
-      return
-    }
-    const minted = mintCookie(req.headers as HeadersLike, deps.secret(), deps.readConfig().cookieDays, deps.hostMaxAgeMs(), at)
-    if (minted !== undefined) {
-      sendJson(res, 200, { ok: true, v: PROTOCOL_VERSION }, { 'set-cookie': minted.setCookie })
       return
     }
     sendJson(res, 200, { ok: true, v: PROTOCOL_VERSION })

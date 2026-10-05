@@ -87,7 +87,7 @@ export function SettingsTab(props: SettingsTabProps): React.ReactNode {
           </div>
           <div className="pl-hint">
             浏览器登录入口 <code>/plugins/dsh-password-login/login</code> 可加入书签：会话失效后重访即凭浏览器记住的密码无感重铸。
-            轮换会立即撤销所有已发会话（含本面板，提交后会自动换发新票）；「回收所有会话」不改密码、只踢人（含 yml 热改密码后想清场的场景，本面板同样自动换票保持在线）。
+            轮换会立即撤销所有已发会话（含本面板，提交后会自动换发新票）；「回收所有会话」不改密码、绝对全员下线（含本面板），点击后需经登录书签重新进入。
           </div>
         </div>
       )}

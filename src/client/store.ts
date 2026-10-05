@@ -89,7 +89,7 @@ export function createStore(fetchLike: FetchLike): PasswordStore {
         }
         set({ busy: false })
         await this.refresh()
-        set({ message: { kind: 'ok', text: '已回收所有已发会话（本面板经自动换票保持在线）' } })
+        set({ message: { kind: 'ok', text: '已回收所有已发会话（含本面板）——请经登录书签重新进入' } })
         return true
       } catch {
         set({ busy: false, message: { kind: 'error', text: 'network error' } })

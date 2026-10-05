@@ -135,26 +135,30 @@ const steps = {
       s.cookieV = cookieOf(r.setCookies)
       return r.status === 200 && s.cookieV !== undefined
     }),
-    step('A32 REVOKE-ALL without password change (panel face)', async (s) => {
+    step('A32 REVOKE-ALL without password change (no reissue)', async (s) => {
       const r = await call(P + '/revoke', { method: 'POST', cookie: s.cookieR2, body: {} })
-      s.cookieR3 = cookieOf(r.setCookies)
-      return r.status === 200 && r.json?.ok === true && s.cookieR3 !== undefined
+      return r.status === 200 && r.json?.ok === true && r.setCookies.length === 0
     }),
-    step('A33 victim dead, revoker survives via reissue', async (s) =>
+    step('A33 absolute logout: victim AND revoker both dead', async (s) =>
       (await call('/api/remote.mux', { method: 'POST', cookie: s.cookieV, body: {} })).status === 401
-      && (await call('/', { cookie: s.cookieR3 })).status === 200)
+      && (await call('/api/remote.mux', { method: 'POST', cookie: s.cookieR2, body: {} })).status === 401),
+    step('A34 post-revoke mint starts a fresh epoch lineage', async (s) => {
+      const r = await call(P + '/session', { headers: { authorization: 'Bearer next-pass' } })
+      s.cookieR4 = cookieOf(r.setCookies)
+      return r.status === 200 && (await call('/', { cookie: s.cookieR4 })).status === 200
+    })
   ],
   B: (s) => [
     step('B01 pure restart keeps valid cookie alive (no false revocation)', async () =>
-      (await call('/', { cookie: s.cookieR3 ?? s.cookieR2 })).status === 200),
+      (await call('/', { cookie: s.cookieR4 ?? s.cookieR2 })).status === 200),
     step('B02 status still configured after restart', async () => {
-      const r = await call(P + '/status', { cookie: s.cookieR3 ?? s.cookieR2 })
+      const r = await call(P + '/status', { cookie: s.cookieR4 ?? s.cookieR2 })
       return r.status === 200 && r.json?.configured === true
     })
   ],
   C: (s) => [
     step('C01 config-channel password change revokes pre-boot cookies', async () =>
-      (await call('/api/remote.mux', { method: 'POST', cookie: s.cookieR3 ?? s.cookieR2, body: {} })).status === 401),
+      (await call('/api/remote.mux', { method: 'POST', cookie: s.cookieR4 ?? s.cookieR2, body: {} })).status === 401),
     step('C02 new password works on session', async () =>
       (await call(P + '/session', { headers: { authorization: 'Bearer cfgpass' } })).status === 200)
   ],
@@ -186,14 +190,18 @@ const steps = {
       s.f2 = cookieOf(b.setCookies)
       return a.status === 200 && b.status === 200 && s.f1 !== undefined && s.f2 !== undefined && s.f1 !== s.f2
     }),
-    step('F02 REVOKE-ALL in unset state (no password at all)', async (s) => {
+    step('F02 REVOKE-ALL in unset state (no password at all, no reissue)', async (s) => {
       const r = await call(P + '/revoke', { method: 'POST', cookie: s.f2, body: {} })
-      s.f2b = cookieOf(r.setCookies)
-      return r.status === 200 && s.f2b !== undefined
+      return r.status === 200 && r.setCookies.length === 0
     }),
-    step('F03 sibling cookie dead, revoker survives', async (s) =>
+    step('F03 absolute logout: both cookies dead (incl. the revoker)', async (s) =>
       (await call('/api/remote.mux', { method: 'POST', cookie: s.f1, body: {} })).status === 401
-      && (await call('/api/remote.mux', { method: 'POST', cookie: s.f2b, body: {} })).status !== 401)
+      && (await call('/api/remote.mux', { method: 'POST', cookie: s.f2, body: {} })).status === 401),
+    step('F04 post-revoke free-mint starts a fresh lineage', async (s) => {
+      const r = await call(P + '/session')
+      s.f2b = cookieOf(r.setCookies)
+      return r.status === 200 && (await call('/api/remote.mux', { method: 'POST', cookie: s.f2b, body: {} })).status !== 401
+    })
   ],
   G: (s) => [
     step('G01 unset-state revocation survives pure restart (epoch kept)', async (s2) =>
@@ -245,7 +253,7 @@ async function main() {
   console.log(JSON.stringify({ phase, verdict: failed === 0 ? 'PASS' : `FAIL(${failed})`, total: list.length }))
   if (process.env.E2E_STATE_FILE !== undefined) {
     const persist = {}
-    for (const key of ['cookieR2', 'cookieR3', 'f1', 'f2b']) if (store[key] !== undefined) persist[key] = store[key]
+    for (const key of ['cookieR2', 'cookieR4', 'f1', 'f2b']) if (store[key] !== undefined) persist[key] = store[key]
     if (Object.keys(persist).length > 0) {
       const { writeFileSync } = await import('node:fs')
       writeFileSync(process.env.E2E_STATE_FILE, JSON.stringify(persist), 'utf8')
