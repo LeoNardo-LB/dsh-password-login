@@ -21,6 +21,7 @@ export interface PasswordStore {
         current?: string;
         next: string;
     }): Promise<boolean>;
+    revoke(): Promise<boolean>;
 }
 export type FetchLike = (input: string, init?: {
     method?: string;

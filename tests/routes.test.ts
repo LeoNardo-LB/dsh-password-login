@@ -69,7 +69,8 @@ function makeDeps(overrides: DepsOverrides = {}): RouteDeps {
     limiter: overrides.limiter ?? createRateLimiter({ sleep: async (ms) => { (overrides.sleeps ??= []).push(ms) } }),
     admit: overrides.admit ?? (() => ({ peer: {} })),
     persistPassword: overrides.persistPassword ?? (async () => {}),
-    onRotated: overrides.onRotated ?? (async () => {})
+    onRotated: overrides.onRotated ?? (async () => {}),
+    onRevoked: overrides.onRevoked ?? (async () => {})
   }
 }
 
@@ -302,6 +303,48 @@ describe('method misuse (contract guard)', () => {
     await routes.rotate(fakeReq({ method: 'GET', body: { next: 'whatever-long' } }), box.res)
     expect(box.statusCode).toBe(405)
     expect(persisted).toEqual([])
+  })
+})
+
+describe('POST /revoke (回收所有会话，不改密)', () => {
+  it('mirrors the admission verdict first', async () => {
+    const routes = createRoutes(makeDeps({ admit: () => ({ rejection: 401 }) }))
+    const box = fakeRes()
+    await routes.revoke(fakeReq({ method: 'POST' }), box.res)
+    expect(box.statusCode).toBe(401)
+  })
+
+  it('rejects wrong verbs with 405', async () => {
+    const routes = createRoutes(makeDeps())
+    const box = fakeRes()
+    await routes.revoke(fakeReq({ method: 'GET' }), box.res)
+    expect(box.statusCode).toBe(405)
+  })
+
+  it('advances the epoch without touching the password and auto-reissues', async () => {
+    let revokedAt: number | undefined
+    const persisted: string[] = []
+    const routes = createRoutes(makeDeps({
+      config: { password: 'hunter2' },
+      persistPassword: async (v) => { persisted.push(v) },
+      onRevoked: async (at) => { revokedAt = at }
+    }))
+    const box = fakeRes()
+    await routes.revoke(fakeReq({ method: 'POST' }), box.res)
+    expect(box.statusCode).toBe(200)
+    expect(revokedAt).toBe(NOW)
+    expect(persisted).toEqual([]) // 密码不动
+    expect(setCookieValue(box)).toContain('dsh-auth-') // 调用者换票存活
+    const cookie = setCookieValue(box).split(';')[0]!
+    const payload = JSON.parse(Buffer.from(cookie.slice(cookie.indexOf('=') + 1).split('.')[1]!, 'base64url').toString('utf8')) as { issuedAt: number }
+    expect(payload.issuedAt).toBeGreaterThanOrEqual(NOW) // 新票不死于自己发起的撤销
+  })
+
+  it('surfaces epoch persistence failures as 500', async () => {
+    const routes = createRoutes(makeDeps({ onRevoked: async () => { throw new Error('domain write failed') } }))
+    const box = fakeRes()
+    await routes.revoke(fakeReq({ method: 'POST' }), box.res)
+    expect(box.statusCode).toBe(500)
   })
 })
 

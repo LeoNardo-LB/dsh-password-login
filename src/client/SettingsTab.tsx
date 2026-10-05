@@ -81,10 +81,13 @@ export function SettingsTab(props: SettingsTabProps): React.ReactNode {
             <P.Button data-pl="submit" variant="primary" size="sm" disabled={state.busy || next.length === 0 || next !== confirm} onClick={submit}>
               {configured ? '轮换密码（全员下线）' : '设置密码'}
             </P.Button>
+            <U.Button data-pl="revoke" variant="outline" size="sm" disabled={state.busy} onClick={() => { void store.revoke() }}>
+              回收所有会话
+            </U.Button>
           </div>
           <div className="pl-hint">
             浏览器登录入口 <code>/plugins/dsh-password-login/login</code> 可加入书签：会话失效后重访即凭浏览器记住的密码无感重铸。
-            轮换会立即撤销所有已发会话（含本面板，提交后会自动换发新票）。
+            轮换会立即撤销所有已发会话（含本面板，提交后会自动换发新票）；「回收所有会话」不改密码、只踢人（含 yml 热改密码后想清场的场景，本面板同样自动换票保持在线）。
           </div>
         </div>
       )}

@@ -8,6 +8,12 @@ describe('resolveEpoch (boot-time)', () => {
     expect(resolveEpoch({ epoch: 5_000, passwordFingerprint: 'aa' }, '', now)).toEqual({ epoch: 0, passwordFingerprint: '' })
   })
 
+  it('unset→unset pure restart keeps a prior revoke armed (epoch survives)', () => {
+    // 密码缺席态下 /revoke 推进的 epoch 不被重启洗掉
+    expect(resolveEpoch({ epoch: 7_000, passwordFingerprint: '' }, '', now)).toEqual({ epoch: 7_000, passwordFingerprint: '' })
+    expect(resolveEpoch(undefined, '', now)).toEqual({ epoch: 0, passwordFingerprint: '' })
+  })
+
   it('fingerprint match → keep stored epoch (pure restart never revokes)', () => {
     const stored = { epoch: 5_000, passwordFingerprint: 'aa' }
     expect(resolveEpoch(stored, 'aa', now)).toEqual(stored)

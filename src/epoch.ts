@@ -13,7 +13,15 @@ export interface EpochState {
 
 /** Resolve the boot-time epoch from the persisted state and the live password. */
 export function resolveEpoch(stored: EpochState | undefined, currentFingerprint: string, now: number): EpochState {
-  if (currentFingerprint === '') return { epoch: 0, passwordFingerprint: '' }
+  if (currentFingerprint === '') {
+    // unset→unset pure restart keeps a prior unset-state revocation armed
+    // (密码缺席时的 /revoke 不被重启洗掉)；set→unset 转换重置为 0（撤权语义
+    // 归密码移除本身，见 README）。
+    if (stored !== undefined && stored.passwordFingerprint === '' && Number.isSafeInteger(stored.epoch)) {
+      return { epoch: stored.epoch, passwordFingerprint: '' }
+    }
+    return { epoch: 0, passwordFingerprint: '' }
+  }
   if (stored !== undefined && stored.passwordFingerprint === currentFingerprint && Number.isSafeInteger(stored.epoch)) {
     return stored
   }

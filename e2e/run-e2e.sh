@@ -80,8 +80,7 @@ wait_port_clear() {
 }
 
 drive() { # drive <phase>
-  local phase="$1" state_file="$EVIDENCE/state.env"
-  if [[ -f "$state_file" ]]; then export E2E_COOKIE_R2="$(cat "$state_file")"; fi
+  local phase="$1" state_file="$EVIDENCE/state.json"
   E2E_STATE_FILE="$state_file" node "$ROOT/e2e/driver.mjs" --base="$BASE" --phase="$phase" | tee "$EVIDENCE/phase-$phase.jsonl"
 }
 
@@ -133,6 +132,16 @@ log 'Phase E: env-seeded password (DSH_PASSWORD_LOGIN_PASSWORD)'
 HOME_E="$BASE_DIR/home-e"; setup_home "$HOME_E"; mount_plugin "$HOME_E"
 PID=$(DSH_PASSWORD_LOGIN_PASSWORD=envseed boot "$HOME_E"); wait_up
 drive E || fail 'phase E'
+stop_host "$PID"
+
+# ---------------------------------------------------------------- Phase F/G
+log 'Phase F/G: unset-state revoke-all + epoch survives pure restart'
+HOME_F="$BASE_DIR/home-f"; setup_home "$HOME_F"; mount_plugin "$HOME_F"
+PID=$(boot "$HOME_F"); wait_up
+drive F || fail 'phase F'
+stop_host "$PID"
+PID=$(boot "$HOME_F"); wait_up
+drive G || fail 'phase G'
 stop_host "$PID"
 
 log 'ALL LOCAL PHASES PASS'

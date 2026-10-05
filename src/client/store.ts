@@ -24,6 +24,7 @@ export interface PasswordStore {
   subscribe(listener: (state: PasswordUiState) => void): () => void
   refresh(): Promise<void>
   rotate(input: { current?: string, next: string }): Promise<boolean>
+  revoke(): Promise<boolean>
 }
 
 export type FetchLike = (input: string, init?: { method?: string, headers?: Record<string, string>, body?: string }) => Promise<{
@@ -71,6 +72,28 @@ export function createStore(fetchLike: FetchLike): PasswordStore {
         set({ loaded: true, unauthorized: false, status: body as PasswordStatus, message: undefined })
       } catch {
         set({ loaded: true, message: { kind: 'error', text: 'network error' } })
+      }
+    },
+    async revoke(): Promise<boolean> {
+      set({ busy: true })
+      try {
+        const response = await fetchLike(ROUTE_PREFIX + '/revoke', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}'
+        })
+        const parsed = await response.json().catch(() => undefined)
+        if (!response.ok) {
+          set({ busy: false, message: { kind: 'error', text: errorMessage(parsed, 'revocation failed') } })
+          return false
+        }
+        set({ busy: false })
+        await this.refresh()
+        set({ message: { kind: 'ok', text: '已回收所有已发会话（本面板经自动换票保持在线）' } })
+        return true
+      } catch {
+        set({ busy: false, message: { kind: 'error', text: 'network error' } })
+        return false
       }
     },
     async rotate(input: { current?: string, next: string }): Promise<boolean> {

@@ -29,6 +29,8 @@ export interface RouteDeps {
   persistPassword(next: string): Promise<void>
   /** Advance the revocation epoch after a successful rotation. */
   onRotated(fingerprint: string, at: number): Promise<void>
+  /** Advance the revocation epoch WITHOUT touching the password (revoke all). */
+  onRevoked(at: number): Promise<void>
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown, extraHeaders?: Record<string, string>): void {
@@ -82,7 +84,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function createRoutes(deps: RouteDeps): { session: Handler, login: Handler, status: Handler, rotate: Handler } {
+export function createRoutes(deps: RouteDeps): { session: Handler, login: Handler, status: Handler, rotate: Handler, revoke: Handler } {
     /** Contract guard: reject method misuse with 405 before any auth logic. */
     const requireMethod = (req: IncomingMessage, res: ServerResponse, method: string): boolean => {
         if (req.method !== method) {
@@ -189,8 +191,8 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
 
   /** Panel face: first-set (loopback only) / rotation (current everywhere). */
   const rotate: Handler = async (req, res) => {
-    if (!requireMethod(req, res, 'POST')) return
-    if (!passesBrowserFence(req.headers as HeadersLike)) {
+        if (!requireMethod(req, res, 'POST')) return
+        if (!passesBrowserFence(req.headers as HeadersLike)) {
       sendJson(res, 403, { ok: false, error: 'forbidden' })
       return
     }
@@ -244,5 +246,31 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
     sendJson(res, 200, { ok: true, v: PROTOCOL_VERSION })
   }
 
-  return { session, login, status, rotate }
+  /** Panel face: revoke every issued session without touching the password
+   * (#512 用户裁决 2026-10-05，恢复被 #21 砍掉的按钮——yml 热改不撤票的补位)。
+   * admit 门（需已认证会话）；成功即全员下线，调用者经自动换票保持在线。 */
+  const revoke: Handler = async (req, res) => {
+    if (!requireMethod(req, res, 'POST')) return
+    const admission = deps.admit(req)
+    if (admission.rejection !== undefined) {
+      res.writeHead(admission.rejection, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(admission.rejection === 401 ? 'unauthorized' : 'forbidden')
+      return
+    }
+    const at = deps.now()
+    try {
+      await deps.onRevoked(at)
+    } catch (error) {
+      sendJson(res, 500, { ok: false, error: 'revocation failed: ' + String(error) })
+      return
+    }
+    const minted = mintCookie(req.headers as HeadersLike, deps.secret(), deps.readConfig().cookieDays, deps.hostMaxAgeMs(), at)
+    if (minted !== undefined) {
+      sendJson(res, 200, { ok: true, v: PROTOCOL_VERSION }, { 'set-cookie': minted.setCookie })
+      return
+    }
+    sendJson(res, 200, { ok: true, v: PROTOCOL_VERSION })
+  }
+
+  return { session, login, status, rotate, revoke }
 }

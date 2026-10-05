@@ -136,6 +136,11 @@ export function apply(ctx: Context, config: Partial<PasswordLoginConfig> = {}): 
         fingerprint.value = fp
         epoch.value = at
         await domain.global.set({ epoch: at, passwordFingerprint: fp })
+      },
+      onRevoked: async (at: number): Promise<void> => {
+        // 密码不动，指纹不动——只推进 epoch（/revoke 通道）。
+        epoch.value = at
+        await domain.global.set({ epoch: at, passwordFingerprint: fingerprint.value })
       }
     }
     const routes = createRoutes(deps)
@@ -144,7 +149,8 @@ export function apply(ctx: Context, config: Partial<PasswordLoginConfig> = {}): 
       ['/session', routes.session],
       ['/login', routes.login],
       ['/status', routes.status],
-      ['/rotate', routes.rotate]
+      ['/rotate', routes.rotate],
+      ['/revoke', routes.revoke]
     ]
     for (const [suffix, handler] of table) {
       ctx.effect(
@@ -169,7 +175,8 @@ export function apply(ctx: Context, config: Partial<PasswordLoginConfig> = {}): 
         connection as unknown as { admit: AdmitFn },
         peekIssuedAt,
         () => epoch.value,
-        () => fingerprint.value !== ''
+        // 常武装：epoch=0 天然惰性（无撤销语义），未设密码态的 /revoke 同样生效。
+        () => true
       )
       ctx.effect(() => restore, 'dsh-password-login: admit revocation')
     }

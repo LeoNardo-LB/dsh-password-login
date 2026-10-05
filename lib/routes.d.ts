@@ -23,11 +23,14 @@ export interface RouteDeps {
     persistPassword(next: string): Promise<void>;
     /** Advance the revocation epoch after a successful rotation. */
     onRotated(fingerprint: string, at: number): Promise<void>;
+    /** Advance the revocation epoch WITHOUT touching the password (revoke all). */
+    onRevoked(at: number): Promise<void>;
 }
 export declare function createRoutes(deps: RouteDeps): {
     session: Handler;
     login: Handler;
     status: Handler;
     rotate: Handler;
+    revoke: Handler;
 };
 //# sourceMappingURL=routes.d.ts.map
