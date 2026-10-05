@@ -31,6 +31,7 @@ dsh plugin --profile web add /path/to/dsh-password-login
   - `password`（secret 角色；`DSH_PASSWORD_LOGIN_PASSWORD` 环境变量为初始默认）
   - `cookieDays`（默认 7，会被宿主 `cookieMaxAgeDays` 上限钳制）
 - **忘密恢复**：yml/环境变量改配置 + 重启（指纹不匹配 → 以启动时间为 epoch，新密码生效 + 全员下线一次）。
+- **yml 直改的实测语义**（0.2.0-rc.2 user-patch watcher 热重载，修正 spec §G「仅启动期生效」假设）：运行中手改 yml 的密码**即时生效**（新密码马上可登录、旧密码立即失效），但**不撤销已发会话**（epoch 只经 /rotate 与重启推进）——想热踢人走面板轮换；yml 改密想踢人须重启。
 
 ## 开发
 

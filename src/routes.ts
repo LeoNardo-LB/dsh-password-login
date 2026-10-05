@@ -83,9 +83,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function createRoutes(deps: RouteDeps): { session: Handler, login: Handler, status: Handler, rotate: Handler } {
-  /** Machine face: mint a session cookie (loopback free-mint or password). */
-  const session: Handler = async (req, res) => {
-    if (!passesBrowserFence(req.headers as HeadersLike)) {
+    /** Contract guard: reject method misuse with 405 before any auth logic. */
+    const requireMethod = (req: IncomingMessage, res: ServerResponse, method: string): boolean => {
+        if (req.method !== method) {
+            sendJson(res, 405, { ok: false, error: `method ${String(req.method)} not allowed` })
+            return false
+        }
+        return true
+    }
+
+    /** Machine face: mint a session cookie (loopback free-mint or password). */
+    const session: Handler = async (req, res) => {
+        if (!requireMethod(req, res, 'GET')) return
+        if (!passesBrowserFence(req.headers as HeadersLike)) {
       sendJson(res, 403, { ok: false, error: 'forbidden' })
       return
     }
@@ -117,6 +127,7 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
 
   /** Browser face: bookmark target. Basic challenge → verify → mint → 303. */
   const login: Handler = async (req, res) => {
+    if (!requireMethod(req, res, 'GET')) return
     if (!passesBrowserFence(req.headers as HeadersLike)) {
       res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
       res.end('forbidden\n')
@@ -166,6 +177,7 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
 
   /** Panel face: existence-only status behind official admission. */
   const status: Handler = async (req, res) => {
+    if (!requireMethod(req, res, 'GET')) return
     const admission = deps.admit(req)
     if (admission.rejection !== undefined) {
       res.writeHead(admission.rejection, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
@@ -177,6 +189,7 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
 
   /** Panel face: first-set (loopback only) / rotation (current everywhere). */
   const rotate: Handler = async (req, res) => {
+    if (!requireMethod(req, res, 'POST')) return
     if (!passesBrowserFence(req.headers as HeadersLike)) {
       sendJson(res, 403, { ok: false, error: 'forbidden' })
       return

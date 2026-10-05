@@ -278,6 +278,33 @@ describe('shared rate limiter (Basic and rotate failures count together)', () =>
   })
 })
 
+describe('method misuse (contract guard)', () => {
+  it('rejects wrong verbs with 405 before any auth logic', async () => {
+    const routes = createRoutes(makeDeps())
+    const post = fakeRes()
+    await routes.session(fakeReq({ method: 'POST', body: {} }), post.res)
+    expect(post.statusCode).toBe(405)
+    const put = fakeRes()
+    await routes.login(fakeReq({ method: 'PUT' }), put.res)
+    expect(put.statusCode).toBe(405)
+    const get = fakeRes()
+    await routes.rotate(fakeReq({ method: 'GET' }), get.res)
+    expect(get.statusCode).toBe(405)
+    const del = fakeRes()
+    await routes.status(fakeReq({ method: 'DELETE' }), del.res)
+    expect(del.statusCode).toBe(405)
+  })
+
+  it('does not mint or mutate on rejected verbs', async () => {
+    const persisted: string[] = []
+    const routes = createRoutes(makeDeps({ persistPassword: async (v) => { persisted.push(v) } }))
+    const box = fakeRes()
+    await routes.rotate(fakeReq({ method: 'GET', body: { next: 'whatever-long' } }), box.res)
+    expect(box.statusCode).toBe(405)
+    expect(persisted).toEqual([])
+  })
+})
+
 describe('minted cookie validity window', () => {
   it('is accepted by decodeCookie under the same secret and authority', async () => {
     const routes = createRoutes(makeDeps())
