@@ -5,7 +5,7 @@ import {
   requestAuthority, sessionCookie, DAY_MS
 } from '../src/cookie.ts'
 
-const SECRET = Buffer.from('0123456789abcdef0123456789abcdef', 'utf8').subarray(0, 32)
+const SECRET = Buffer.from('0123456789abcdef0123456789abcdef0123456789abcdef', 'utf8').subarray(0, 32)
 
 function independentBase64Url(value: Uint8Array): string {
   return Buffer.from(value).toString('base64url')
@@ -55,9 +55,9 @@ describe('cookie name/value (official v1 format)', () => {
     expect(parts[0]).toBe('v1')
     // Key order is load-bearing: the official encoder JSON.stringifies the
     // payload object built as {version, authority, issuedAt, expiresAt}.
-    expect(Buffer.from(parts[1], 'base64url').toString('utf8'))
+    expect(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8'))
       .toBe('{"version":1,"authority":"localhost:3000","issuedAt":1000,"expiresAt":2000}')
-    const expectedSignature = independentBase64Url(createHmac('sha256', SECRET).update(parts[1]).digest())
+    const expectedSignature = independentBase64Url(createHmac('sha256', SECRET).update(parts[1] ?? '').digest())
     expect(parts[2]).toBe(expectedSignature)
   })
 
