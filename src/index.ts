@@ -9,6 +9,7 @@ import { passwordLoginDomain } from './domain.ts'
 import { resolveEpoch, type EpochState } from './epoch.ts'
 import { isLoopbackPeer } from './loopback.ts'
 import { passwordFingerprint, createRateLimiter } from './password.ts'
+import { LOGIN_PATH, shouldRedirectToLogin } from './rootredirect.ts'
 import { createRoutes, type Admission, type Handler } from './routes.ts'
 import { ROUTE_PREFIX, type PasswordLoginConfig } from './types.ts'
 
@@ -35,6 +36,7 @@ interface BrowserAuthSurface {
 
 interface ConnectionSurface {
   admit(request: unknown): Admission
+  authorizeIndex?(request: unknown, response: unknown): boolean
   browserAuth?: BrowserAuthSurface
 }
 
@@ -179,6 +181,34 @@ export function apply(ctx: Context, config: Partial<PasswordLoginConfig> = {}): 
         () => true
       )
       ctx.effect(() => restore, 'dsh-password-login: admit revocation')
+    }
+
+    // #512 根路径弹跳：无 token 且未认证的 index 请求 → 303 书签登录页
+    // （链式包装 authorizeIndex，dispose 还原；stale 时让位于官方 401 防死循环）。
+    if (!stale && connection !== undefined && typeof connection.authorizeIndex === 'function') {
+      const holder = connection as { authorizeIndex: NonNullable<ConnectionSurface['authorizeIndex']> }
+      const originalAuthorize = holder.authorizeIndex
+      const browserAuthRef = browserAuth
+      const wrappedAuthorize: NonNullable<ConnectionSurface['authorizeIndex']> = (request, response) => {
+        const req = request as { url?: string, headers: HeadersLike }
+        try {
+          if (
+            browserAuthRef !== undefined
+            && shouldRedirectToLogin(req.url, browserAuthRef.isAuthenticated(req as never), stale)
+          ) {
+            ;(response as { writeHead: (status: number, headers: Record<string, string>) => void, end: () => void }).writeHead(303, { 'cache-control': 'no-store', location: LOGIN_PATH })
+            ;(response as { end: () => void }).end()
+            return false
+          }
+        } catch {
+          // fail-open：任何包装层异常走官方 authorizeIndex。
+        }
+        return originalAuthorize.call(connection, request, response)
+      }
+      holder.authorizeIndex = wrappedAuthorize
+      ctx.effect(() => () => {
+        if (holder.authorizeIndex === wrappedAuthorize) holder.authorizeIndex = originalAuthorize
+      }, 'dsh-password-login: authorizeIndex redirect')
     }
 
     ctx.logger.info(

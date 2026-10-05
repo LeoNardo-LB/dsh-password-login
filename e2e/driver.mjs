@@ -48,7 +48,10 @@ const steps = {
       const r = await call('/', { cookie: s.cookieA })
       return r.status === 200
     }),
-    step('A03 root without cookie is 401', async () => (await call('/')).status === 401),
+    step('A03 root without cookie bounces to login (303, no more 401 shell)', async () => {
+      const r = await call('/')
+      return r.status === 303 && r.headers.get('location') === P + '/login'
+    }),
     step('A04 /api admission passes with minted cookie', async (s) => {
       const r = await call('/api/remote.mux', { method: 'POST', cookie: s.cookieA, body: {} })
       return r.status !== 401
@@ -201,6 +204,14 @@ const steps = {
       const r = await call(P + '/session')
       s.f2b = cookieOf(r.setCookies)
       return r.status === 200 && (await call('/api/remote.mux', { method: 'POST', cookie: s.f2b, body: {} })).status !== 401
+    }),
+    step('F05 zero-config root bounce chain: / → login → / automated', async () => {
+      const r1 = await call('/')
+      if (r1.status !== 303 || r1.headers.get('location') !== P + '/login') return false
+      const r2 = await call(P + '/login')
+      if (r2.status !== 303) return false
+      const cookie = cookieOf(r2.setCookies)
+      return cookie !== undefined && (await call('/', { cookie })).status === 200
     })
   ],
   G: (s) => [
