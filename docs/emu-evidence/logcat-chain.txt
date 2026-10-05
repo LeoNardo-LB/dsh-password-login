@@ -1,0 +1,8 @@
+10-05 19:12:43.792  3946  3967 I DshConnRegistry: session mint not taken for http://10.0.2.2:8181: HTTP 401 (free)
+10-05 19:12:43.832  3946  3969 I DshConnRegistry: auth recovered for http://10.0.2.2:8181 via PasswordMint
+10-05 19:13:35.052  4051  4051 I AconfigPackage: android.uprobestats.mainline.flags is mapped to com.android.uprobestats
+10-05 19:13:35.053  4051  4051 I AconfigPackage: android.uprobestats.flags is mapped to system
+10-05 19:13:44.489  4074  4074 I AconfigPackage: android.uprobestats.mainline.flags is mapped to com.android.uprobestats
+10-05 19:13:44.489  4074  4074 I AconfigPackage: android.uprobestats.flags is mapped to system
+10-05 19:13:55.591  4210  4210 I AconfigPackage: android.uprobestats.mainline.flags is mapped to com.android.uprobestats
+10-05 19:13:55.592  4210  4210 I AconfigPackage: android.uprobestats.flags is mapped to system
