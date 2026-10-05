@@ -24,6 +24,7 @@ dsh plugin --profile web add /path/to/dsh-password-login
 | `GET /plugins/dsh-password-login/login` | 浏览器书签 | 已设密码：401 Basic challenge → 浏览器原生弹窗（用户名忽略）→ 验密铸票 303 回 `/`；未设密码：回环铸票 / 非回环 403 |
 | `GET /plugins/dsh-password-login/status` | 面板 | 已认证会话 → `{configured, stale, v}` |
 | `POST /plugins/dsh-password-login/rotate` | 面板 | JSON `{current?, next}`。首设限回环；改密须 current。成功自动铸新票（改密者在线，其余全员下线） |
+| `POST /plugins/dsh-password-login/revoke` | 面板 | 已认证会话 → **回收所有已发会话（不改密码、不动指纹）**。调用者经自动换票保持在线；未设密码态同样生效（yml 热改密码后想清场的补位通道，用户裁决 2026-10-05 恢复） |
 
 - **设置面板**：dsh 设置 → 内置插件 → 「登录密码」页签（UI 全部为宿主供给的 dsh 原语，无第三方组件）。
 - **配置**（profile 条目 `dsh-password-login`）：
