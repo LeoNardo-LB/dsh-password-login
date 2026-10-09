@@ -59,13 +59,13 @@ curl -i http://127.0.0.1:3080/plugins/dsh-password-login/status
 | 动作 | 效果 | 典型用途 |
 |---|---|---|
 | **rotate（轮换）** `POST /rotate` `{current, next}` | 改密 + **全员下线**；操作者凭新密码自动换新票在线 | 定期换密；怀疑泄露 |
-| **revoke（回收）** `POST /revoke` | **不改密，只踢人**：所有已发会话作废（含点击者本人，不自动换票），密码不变——知道密码的人重新登录即回 | 临时清场；yml 改密后补踢旧会话 |
+| **revoke（回收）** `POST /revoke` | **不改密，只踢人**：所有已发会话作废（含点击者本人，不自动换票），密码不变——知道密码的人重新登录即回 | 临时清场；怀疑会话泄露（cookie 被偷/借出设备） |
 
 两者区别一句话：**rotate 换锁，revoke 清场**。
 
 ## 五、注意事项（重要）
 
-1. **yml/环境变量热改的边界**（0.2.0-rc.2 实测）：运行中手改 yml 密码**即时生效**（新密立即可用、旧密立即失效），但**不撤销已发会话**——想踢已登录的人，用面板 rotate 或重启。重启时若密码指纹不匹配会自动全员下线一次。
+1. **密码变更均匀不变量**（0.2.0-rc.2 实测，2026-10-05 终版）：密码经**任何通道**变化——面板 rotate、运行中手改 yml（patch watcher 热重载）、yml/env+重启——都**即时全员下线**。通道间只差"谁拿到新票"：rotate=操作者自动换票存活；yml 直改=全员（含操作者）重走登录链。重启时指纹不匹配仍会兜底再全员下线一次。
 2. **回环≠安全边界**：未设密码态的免密铸票只认回环对端；设密后回环同样要验密（密码是唯一用户面凭据）。
 3. **限速**：密码试错与 rotate 失败共用限速器——连续 5 次失败后每次尝试强制 1 秒延迟（无永久锁死，等一会儿即可）。
 4. **Cookie 有效期**：`cookieDays` 默认 7 天，且被宿主全局 `cookieMaxAgeDays` 上限钳制——配得再大也可能被压小。
@@ -93,9 +93,9 @@ curl -i http://127.0.0.1:3080/plugins/dsh-password-login/status
 ```bash
 pnpm install && pnpm approve-builds esbuild
 pnpm typecheck     # tsc --noEmit（src + tests）
-pnpm test          # vitest run（56 单测）
+pnpm test          # vitest run（68 单测）
 pnpm build         # 宿主 tsc + 客户端 esbuild bundle
-bash e2e/run-e2e.sh        # 本地五阶段 E2E（真实 dsh，40 断言）
+bash e2e/run-e2e.sh        # 本地九阶段 E2E（真实 dsh，56 断言）
 bash e2e/docker/run.sh     # docker 非回环对端矩阵（12 断言）
 ```
 
