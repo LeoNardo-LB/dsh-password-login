@@ -238,7 +238,9 @@ export function createRoutes(deps: RouteDeps): { session: Handler, login: Handle
       sendJson(res, 500, { ok: false, error: 'rotation failed: ' + String(error) })
       return
     }
-    const minted = mintCookie(req.headers as HeadersLike, deps.secret(), deps.readConfig().cookieDays, deps.hostMaxAgeMs(), at)
+    // 换票用 onRotated 之后的 fresh now()：热改 watch 可能在 persist 窗口内把
+    // epoch 推到更晚，旧 `at` 铸的票会死于 issuedAt < epoch——fresh now 恒 ≥ 两序。
+    const minted = mintCookie(req.headers as HeadersLike, deps.secret(), deps.readConfig().cookieDays, deps.hostMaxAgeMs(), deps.now())
     if (minted !== undefined) {
       sendJson(res, 200, { ok: true, v: PROTOCOL_VERSION }, { 'set-cookie': minted.setCookie })
       return

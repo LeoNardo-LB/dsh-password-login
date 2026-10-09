@@ -144,4 +144,17 @@ PID=$(boot "$HOME_F"); wait_up
 drive G || fail 'phase G'
 stop_host "$PID"
 
+# ---------------------------------------------------------------- Phase H/I
+log 'Phase H/I: yml hot-change revokes immediately (uniform invariant, NO restart)'
+HOME_H="$BASE_DIR/home-h"; setup_home "$HOME_H"; mount_plugin "$HOME_H"
+PID=$(boot "$HOME_H"); wait_up
+drive H || fail 'phase H'
+# 热改：服务器保持运行，patch watcher 即时重载（重启即走指纹重置路径、掩盖 watch）
+PATCH_H=$(grep -rl 'hot2' "$HOME_H/profiles/web" --include='*.yml' | head -1)
+[[ -n "${PATCH_H:-}" ]] || fail "persisted password patch not found for hot-change"
+sed -i 's/hot2/hot3/g' "$PATCH_H"
+sleep 1
+drive I || fail 'phase I'
+stop_host "$PID"
+
 log 'ALL LOCAL PHASES PASS'

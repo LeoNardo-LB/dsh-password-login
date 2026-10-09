@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveEpoch, revocationActive } from '../src/epoch.ts'
+import { resolveEpoch, revocationActive, hotPasswordTransition } from '../src/epoch.ts'
 
 describe('resolveEpoch (boot-time)', () => {
   const now = 9_000_000
@@ -27,5 +27,16 @@ describe('resolveEpoch (boot-time)', () => {
   it('revocationActive follows the fingerprint', () => {
     expect(revocationActive('')).toBe(false)
     expect(revocationActive('aa')).toBe(true)
+  })
+
+  it('hotPasswordTransition detects any-channel change (incl. removal)', () => {
+    const fp = (p: string) => 'fp(' + p + ')'
+    // 一致 → 无动作（/rotate 推进后 watch 重入归零，防双重推进）
+    expect(hotPasswordTransition('fp(old)', 'old', fp)).toBeNull()
+    expect(hotPasswordTransition('', '', fp)).toBeNull()
+    // 变更 → 推进到新指纹；移除 → 推进到 ''
+    expect(hotPasswordTransition('fp(old)', 'new', fp)).toBe('fp(new)')
+    expect(hotPasswordTransition('fp(old)', '', fp)).toBe('')
+    expect(hotPasswordTransition('', 'first', fp)).toBe('fp(first)')
   })
 })

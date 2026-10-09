@@ -218,6 +218,39 @@ const steps = {
     step('G01 unset-state revocation survives pure restart (epoch kept)', async (s2) =>
       (await call('/api/remote.mux', { method: 'POST', cookie: s2.f2b, body: {} })).status !== 401
       && (await call('/api/remote.mux', { method: 'POST', cookie: s2.f1, body: {} })).status === 401)
+  ],
+  H: (s) => [
+    step('H01 first-set hot1 via rotate', async () =>
+      (await call(P + '/rotate', { method: 'POST', body: { next: 'hot1' } })).status === 200),
+    step('H02 mint a cookie under hot1 (revocation victim)', async (s) => {
+      const r = await call(P + '/session', { headers: { authorization: 'Bearer hot1' } })
+      s.hCookie = cookieOf(r.setCookies)
+      return r.status === 200 && s.hCookie !== undefined
+    }),
+    step('H03 rotate to hot2 — rotator reissue survives the hot watch (no double-kill)', async () => {
+      const r = await call(P + '/rotate', { method: 'POST', body: { current: 'hot1', next: 'hot2' } })
+      const reissued = cookieOf(r.setCookies)
+      if (r.status !== 200 || reissued === undefined) return false
+      return (await call('/', { cookie: reissued })).status === 200
+    })
+  ],
+  I: (s) => [
+    step('I01 yml hot-change applied without restart (hot3 mints)', async () => {
+      // watcher 重载有去抖窗口——轮询最多 ~8s 而非单发
+      for (let i = 0; i < 16; i += 1) {
+        const r = await call(P + '/session', { headers: { authorization: 'Bearer hot3' } })
+        if (r.status === 200) return true
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+      return false
+    }),
+    step('I02 pre-change cookie dead IMMEDIATELY (uniform invariant, no restart)', async (s) =>
+      (await call('/api/remote.mux', { method: 'POST', cookie: s.hCookie, body: {} })).status === 401),
+    step('I03 fresh hot3 cookie alive', async () => {
+      const r = await call(P + '/session', { headers: { authorization: 'Bearer hot3' } })
+      const cookie = cookieOf(r.setCookies)
+      return r.status === 200 && cookie !== undefined && (await call('/', { cookie })).status === 200
+    })
   ]
 }
 
@@ -264,7 +297,7 @@ async function main() {
   console.log(JSON.stringify({ phase, verdict: failed === 0 ? 'PASS' : `FAIL(${failed})`, total: list.length }))
   if (process.env.E2E_STATE_FILE !== undefined) {
     const persist = {}
-    for (const key of ['cookieR2', 'cookieR4', 'f1', 'f2b']) if (store[key] !== undefined) persist[key] = store[key]
+    for (const key of ['cookieR2', 'cookieR4', 'f1', 'f2b', 'hCookie']) if (store[key] !== undefined) persist[key] = store[key]
     if (Object.keys(persist).length > 0) {
       const { writeFileSync } = await import('node:fs')
       writeFileSync(process.env.E2E_STATE_FILE, JSON.stringify(persist), 'utf8')

@@ -6,7 +6,7 @@ import { installRevocation, type AdmitFn } from './admit.ts'
 import { Config } from './config.ts'
 import { cookieName, cookieValue, DAY_MS, decodeCookie, encodeCookie, header, requestAuthority, type HeadersLike } from './cookie.ts'
 import { passwordLoginDomain } from './domain.ts'
-import { resolveEpoch, type EpochState } from './epoch.ts'
+import { resolveEpoch, hotPasswordTransition, type EpochState } from './epoch.ts'
 import { isLoopbackPeer } from './loopback.ts'
 import { passwordFingerprint, createRateLimiter } from './password.ts'
 import { LOGIN_PATH, shouldRedirectToLogin } from './rootredirect.ts'
@@ -121,6 +121,23 @@ export function apply(ctx: Context, config: Partial<PasswordLoginConfig> = {}): 
     }
     const epoch = { value: resolved.epoch }
     const fingerprint = { value: resolved.passwordFingerprint }
+
+    // #512 均匀不变量（用户裁决 2026-10-05）：密码经**任何通道**热变（yml/env
+    // patch watcher 重载）→ 与 /rotate 同语义，epoch 即时推进全员下线。判据用
+    // fingerprint.value（"epoch 已反映的指纹"）——/rotate 推进后它已同步，
+    // watch 重入判 null，不会双重推进误杀轮换者新票。
+    const stopHotWatch = ctx.on('loader/volatile-update' as never, (() => {
+      const next = hotPasswordTransition(fingerprint.value, readLiveConfig(config).password, passwordFingerprint)
+      if (next === null) return
+      const at = Date.now()
+      fingerprint.value = next
+      epoch.value = at
+      void domain.global.set({ epoch: at, passwordFingerprint: next }).catch((error: unknown) => {
+        ctx.logger.warn('dsh-password-login: hot password change epoch persist failed: ' + String(error))
+      })
+      ctx.logger.info('dsh-password-login: hot password change detected — all sessions revoked')
+    }) as never) as unknown as () => void
+    ctx.effect(() => stopHotWatch, 'dsh-password-login: hot password watch')
 
     const deps = {
       readConfig: () => readLiveConfig(config),
