@@ -10,7 +10,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE=dsh-pw-e2e:latest
 CONTAINER=dsh-pw-e2e
-HOST_PORT=8181
+HOST_PORT="${E2E_DOCKER_PORT:-8181}"
 
 log() { printf '\n== %s ==\n' "$*"; }
 fail() { printf 'DOCKER E2E FAILED: %s\n' "$*" >&2; docker rm -f "$CONTAINER" >/dev/null 2>&1 || true; exit 1; }
